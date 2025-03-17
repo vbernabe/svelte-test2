@@ -1,4 +1,6 @@
 import express from "express";
+const mysql = require("mysql");
+const { exec } = require("child_process");
 
 const app = express();
 
@@ -26,4 +28,51 @@ app.use((err, req, res, next) => {
 
 app.listen(3000, () => {
   console.log("Server running on port 3000");
+});
+
+app.use(express.json());
+
+const db = mysql.createConnection({
+    host: "localhost",
+    user: "root",
+    password: "",
+    database: "users_db",
+});
+
+// 🚨 SQL Injection Vulnerability (OWASP A03:2021)
+app.post("/login", (req, res) => {
+    const { username, password } = req.body;
+
+    // 🚨 User input is concatenated directly into SQL query
+    const query = `SELECT * FROM users WHERE username = '${username}' AND password = '${password}'`;
+
+    db.query(query, (err, results) => {
+        if (err) return res.status(500).send("Database error");
+        if (results.length > 0) {
+            res.send("Login successful");
+        } else {
+            res.send("Invalid credentials");
+        }
+    });
+});
+
+// 🚨 Command Injection Vulnerability (OWASP A07:2021)
+app.get("/execute", (req, res) => {
+    const command = req.query.cmd;
+
+    // 🚨 Unvalidated user input directly passed to `exec()`
+    exec(command, (error, stdout, stderr) => {
+        if (error) {
+            return res.status(500).send(`Error: ${error.message}`);
+        }
+        res.send(stdout);
+    });
+});
+
+// 🚨 XSS Vulnerability (OWASP A07:2021)
+app.get("/xss", (req, res) => {
+    const message = req.query.message;
+
+    // 🚨 User input directly injected into HTML
+    res.send(`<h1>${message}</h1>`);
 });
